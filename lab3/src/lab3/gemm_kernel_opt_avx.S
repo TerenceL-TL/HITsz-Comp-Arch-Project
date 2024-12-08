@@ -87,13 +87,40 @@
 
     vbroadcastss (MAT_A, mat_elem_idx), mat_a0_0_8    // 将A[m][k]广播到AVX寄存器的8个单元
 
-    // TODO 练习3: 请添加加载并广播A[m+1][k]-->mat_a1_0_8的逻辑
+    ;// TODO 练习3: 请添加加载并广播A[m+1][k]-->mat_a1_0_8的逻辑
+    mov  temp_reg,mat_elem_idx
+    add DIM_K ,mat_elem_idx
+    shl $2 ,mat_elem_idx
+    vbroadcastss (MAT_A, mat_elem_idx), mat_a1_0_8
 
 .endm
 
-.macro LOAD_MAT_B    // 每次装载矩阵B一行32个元素, 即B[k][n:n+32]
+.macro LOAD_MAT_B    // Load 32 elements from matrix B in one row, i.e., B[k][n:n+32]
 
-    // TODO 练习3: 请添加加载B[k][n:n+32]-->mat_b0_0_8, mat_b0_8_16, mat_b0_16_24, mat_b0_24_32的逻辑
+    ;// TODO 练习3: 请添加加载B[k][n:n+32]-->mat_b0_0_8, mat_b0_8_16, mat_b0_16_24, mat_b0_24_32的逻辑
+    mov loop_k, %rax
+    mul DIM_N
+    mov %rax, temp_reg
+    add loop_n, temp_reg
+
+    // Calculate the byte address of B[k][n]
+    mov temp_reg, mat_elem_idx
+    shl $2, mat_elem_idx        // Shift left, equivalent to multiplying by 4
+
+    // Load B[k][n:n+8] into mat_b0_0_8
+    vmovups (MAT_B, mat_elem_idx), mat_b0_0_8
+
+    // Load B[k][n+8:n+16] into mat_b0_8_16
+    add $32, mat_elem_idx       // Offset by 8 floats, i.e., 32 bytes
+    vmovups (MAT_B, mat_elem_idx), mat_b0_8_16
+
+    // Load B[k][n+16:n+24] into mat_b0_16_24
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups (MAT_B, mat_elem_idx), mat_b0_16_24
+
+    // Load B[k][n+24:n+32] into mat_b0_24_32
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups (MAT_B, mat_elem_idx), mat_b0_24_32
 
 .endm
 
@@ -103,42 +130,106 @@
     mov %rax, temp_reg
     add loop_n, temp_reg
 
-    // 装载矩阵C第一行的数据, 即C[m][n:n+32]
+    // Load the first row of matrix C, i.e., C[m][n:n+32]
     mov temp_reg, mat_elem_idx
-    shl $2, mat_elem_idx        // 左移，相当于乘4
+    shl $2, mat_elem_idx        // Shift left, equivalent to multiplying by 4
 
-    // TODO 练习3: 请添加加载C[m][n:n+32]-->mat_c0_0_8, mat_c0_8_16, mat_c0_16_24, mat_c0_24_32的逻辑
+    // Load C[m][n:n+8] into mat_c0_0_8
+    vmovups (MAT_C, mat_elem_idx), mat_c0_0_8
 
-    // 装载矩阵C第二行的数据, 即C[m+1][n:n+32]
+    // Load C[m][n+8:n+16] into mat_c0_8_16
+    add $32, mat_elem_idx       // Offset by 8 floats, i.e., 32 bytes
+    vmovups (MAT_C, mat_elem_idx), mat_c0_8_16
+
+    // Load C[m][n+16:n+24] into mat_c0_16_24
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups (MAT_C, mat_elem_idx), mat_c0_16_24
+
+    // Load C[m][n+24:n+32] into mat_c0_24_32
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups (MAT_C, mat_elem_idx), mat_c0_24_32
+
+    // Load the second row of matrix C, i.e., C[m+1][n:n+32]
     mov temp_reg, mat_elem_idx
     add DIM_N, mat_elem_idx
-    shl $2, mat_elem_idx        // 左移，相当于乘4
+    shl $2, mat_elem_idx        // Shift left, equivalent to multiplying by 4
 
-    // TODO 练习3: 请添加加载C[m+1][n:n+32]-->mat_c1_0_8, mat_c1_8_16, mat_c1_16_24, mat_c1_24_32的逻辑
+    // Load C[m+1][n:n+8] into mat_c1_0_8
+    vmovups (MAT_C, mat_elem_idx), mat_c1_0_8
 
+    // Load C[m+1][n+8:n+16] into mat_c1_8_16
+    add $32, mat_elem_idx       // Offset by 8 floats, i.e., 32 bytes
+    vmovups (MAT_C, mat_elem_idx), mat_c1_8_16
+
+    // Load C[m+1][n+16:n+24] into mat_c1_16_24
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups (MAT_C, mat_elem_idx), mat_c1_16_24
+
+    // Load C[m+1][n+24:n+32] into mat_c1_24_32
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups (MAT_C, mat_elem_idx), mat_c1_24_32
 .endm
 
 .macro STORE_MAT_C
-    // 保存矩阵C第一行的数据
+    // Save the first row of matrix C
     mov loop_m, %rax
     mul DIM_N
     mov %rax, temp_reg
     add loop_n, temp_reg
 
-    // 保存矩阵C第一行的数据, 即C[m][n:n+32]
+    // Save the first row of matrix C, i.e., C[m][n:n+32]
     mov temp_reg, mat_elem_idx
-    shl $2, mat_elem_idx        // 左移，相当于乘4
+    shl $2, mat_elem_idx        // Shift left, equivalent to multiplying by 4
 
-    // TODO 练习3: 请添加保存mat_c0_0_8, mat_c0_8_16, mat_c0_16_24, mat_c0_24_32 --> C[m][n:n+32]的逻辑
+    // Save mat_c0_0_8 to C[m][n:n+8]
+    vmovups mat_c0_0_8, (MAT_C, mat_elem_idx)
 
-    // 保存矩阵C第二行的数据, 即C[m+1][n:n+32]
-    // TODO 练习3: 请添加保存mat_c1_0_8, mat_c1_8_16, mat_c1_16_24, mat_c1_24_32 --> C[m+1][n:n+32]的逻辑
+    // Save mat_c0_8_16 to C[m][n+8:n+16]
+    add $32, mat_elem_idx       // Offset by 8 floats, i.e., 32 bytes
+    vmovups mat_c0_8_16, (MAT_C, mat_elem_idx)
 
+    // Save mat_c0_16_24 to C[m][n+16:n+24]
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups mat_c0_16_24, (MAT_C, mat_elem_idx)
+
+    // Save mat_c0_24_32 to C[m][n+24:n+32]
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups mat_c0_24_32, (MAT_C, mat_elem_idx)
+
+    // Save the second row of matrix C, i.e., C[m+1][n:n+32]
+    mov temp_reg, mat_elem_idx
+    add DIM_N, mat_elem_idx
+    shl $2, mat_elem_idx        // Shift left, equivalent to multiplying by 4
+
+    // Save mat_c1_0_8 to C[m+1][n:n+8]
+    vmovups mat_c1_0_8, (MAT_C, mat_elem_idx)
+
+    // Save mat_c1_8_16 to C[m+1][n+8:n+16]
+    add $32, mat_elem_idx       // Offset by 8 floats, i.e., 32 bytes
+    vmovups mat_c1_8_16, (MAT_C, mat_elem_idx)
+
+    // Save mat_c1_16_24 to C[m+1][n+16:n+24]
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups mat_c1_16_24, (MAT_C, mat_elem_idx)
+
+    // Save mat_c1_24_32 to C[m+1][n+24:n+32]
+    add $32, mat_elem_idx       // Offset by another 32 bytes
+    vmovups mat_c1_24_32, (MAT_C, mat_elem_idx)
 .endm
 
-.macro DO_COMPUTE      // 计算 C[m:m+2][n:n+32] += A[m:m+2][k] * B[k:k+8][n:n+32]
+.macro DO_COMPUTE      // Compute C[m:m+2][n:n+32] += A[m:m+2][k] * B[k:k+8][n:n+32]
 
-    // TODO 练习3: 请添加计算C[m:m+2][n:n+32] += A[m:m+2][k] * B[k:k+8][n:n+32]的逻辑
+    // Compute C[m][n:n+32] += A[m][k] * B[k][n:n+32]
+    vfmadd231ps mat_a0_0_8, mat_b0_0_8, mat_c0_0_8
+    vfmadd231ps mat_a0_0_8, mat_b0_8_16, mat_c0_8_16
+    vfmadd231ps mat_a0_0_8, mat_b0_16_24, mat_c0_16_24
+    vfmadd231ps mat_a0_0_8, mat_b0_24_32, mat_c0_24_32
+
+    // Compute C[m+1][n:n+32] += A[m+1][k] * B[k][n:n+32]
+    vfmadd231ps mat_a1_0_8, mat_b0_0_8, mat_c1_0_8
+    vfmadd231ps mat_a1_0_8, mat_b0_8_16, mat_c1_8_16
+    vfmadd231ps mat_a1_0_8, mat_b0_16_24, mat_c1_16_24
+    vfmadd231ps mat_a1_0_8, mat_b0_24_32, mat_c1_24_32
 
 .endm
 

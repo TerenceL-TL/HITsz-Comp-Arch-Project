@@ -58,7 +58,6 @@
     xor loop_k, loop_k
     xor loop_n, loop_n
 .endm
-
 .macro DO_GEMM
 DO_LOOP_K:
     xor loop_m, loop_m
@@ -69,35 +68,43 @@ DO_LOOP_M:
     mov loop_m, %rax
     mul DIM_K
     mov %rax, mat_elem_idx
-    add loop_k, mat_elem_idx                    // 计算 m*K+k
-    flds (MAT_A, mat_elem_idx, 4)     // 加载 A[m][k]
+    add loop_k, mat_elem_idx                    // Calculate m*K+k
+    flds (MAT_A, mat_elem_idx, 4)     // Load A[m][k]
 
 DO_LOOP_N:
     mov DIM_N, %rax
     mul loop_k
     mov %rax, mat_elem_idx
     add loop_n, mat_elem_idx
-    flds (MAT_B, mat_elem_idx, 4)     // 加载 B[k][n]
-    fmul %st(1), %st(0)                 // 计算A[m][k] * B[k][n]  --> st(0)
+    flds (MAT_B, mat_elem_idx, 4)     // Load B[k][n]
+    fmul %st(1), %st(0)                 // Calculate A[m][k] * B[k][n]  --> st(0)
 
-    // TODO  练习1: 添加计算A[m][k] * B[k][n+1] --> st(0)的逻辑
-
+    // Add logic to calculate A[m][k] * B[k][n+1] --> st(0)
+    add $1, mat_elem_idx                // Move to B[k][n+1]
+    flds (MAT_B, mat_elem_idx, 4)       // Load B[k][n+1]
+    fmul %st(2), %st(0)                 // Calculate A[m][k] * B[k][n+1]  --> st(0)
 
     mov DIM_N, %rax
     mul loop_m
     mov %rax, mat_elem_idx
-    add loop_n, mat_elem_idx                    // 计算 m*N+n
+    add loop_n, mat_elem_idx                    // Calculate m*N+n
 
-    // TODO 练习1: 请添加加载C[m][n] --> st(1) 和 C[m][n+1] --> st(0)的逻辑
+    // Add logic to load C[m][n] --> st(1) and C[m][n+1] --> st(0)
+    flds (MAT_C, mat_elem_idx, 4)      // Load C[m][n] --> st(1)
+    add $1, mat_elem_idx                // Move to C[m][n+1]
+    flds (MAT_C, mat_elem_idx, 4)      // Load C[m][n+1] --> st(0)
 
-    // TODO 练习1: 请添加部分和累加逻辑: C[m][n+1] + A[m][k] * B[k][n+1] 和 C[m][n] + A[m][k] * B[k][n]
+    // Add partial sum accumulation logic: C[m][n+1] + A[m][k] * B[k][n+1] and C[m][n] + A[m][k] * B[k][n]
+    faddp %st(2), %st(0)                // st(0) = C[m][n+1] + A[m][k] * B[k][n+1]
+    faddp %st(2), %st(0)                // st(0) = C[m][n] + A[m][k] * B[k][n]
 
-    fstps (MAT_C, mat_elem_idx, 4)      // 保存C[m][n+1]
+    // Save C[m][n+1] and C[m][n]
+    fstps (MAT_C, mat_elem_idx, 4)      // Save C[m][n+1]
+    sub $1, mat_elem_idx               // Move to C[m][n]
+    fstps (MAT_C, mat_elem_idx, 4)      // Save C[m][n]
 
-    // TODO 练习1: 请添加保存C[m][n]的逻辑
-
-    // TODO 练习1: 请添加N维度的循环更新逻辑
-
+    // Update the loop control variable for dimension N
+    add $2, loop_n                      // Increment by 2 each iteration
     cmp DIM_N, loop_n
     jl DO_LOOP_N
 
@@ -117,6 +124,3 @@ gemm_kernel_opt_loop_unrolling:
     DO_GEMM
     POPD
     ret
-    
-
-
