@@ -1,4 +1,4 @@
-// #define USE_CUBLAS
+#define USE_CUBLAS
 
 #include <iostream>
 #include <cstdio>
@@ -10,7 +10,7 @@
 #include <cmath>
 using namespace std;
 
-const int TILE_WIDTH = 16;	// 定义块block大小
+const int TILE_WIDTH = 64;	// 定义块block大小
 
 /////////
 // Matrix multiplication with shared memory (CUDA Kernel) on the device: C = A * B
@@ -19,9 +19,98 @@ const int BLOCK_SIZE = TILE_WIDTH;
 __global__ void MatrixMulSharedMemKernel(float *A,
     float *B, float *C, int wA,
     int wB) {
+  // Block index
+  int bx = blockIdx.x;
+  int by = blockIdx.y;
 
+  // Thread index
+  int tx = threadIdx.x;
+  int ty = threadIdx.y;
 
+  // Index of the first sub-matrix of A processed by the block
+  int aBegin = wA * BLOCK_SIZE * by;
 
+  // Index of the last sub-matrix of A processed by the block
+  int aEnd   = aBegin + wA - 1;
+
+  // Step size used to iterate through the sub-matrices of A
+  int aStep  = BLOCK_SIZE;
+
+  // Index of the first sub-matrix of B processed by the block
+  int bBegin = BLOCK_SIZE * bx;
+
+  // Step size used to iterate through the sub-matrices of B
+  int bStep  = BLOCK_SIZE * wB;
+
+  // Csub is used to store the element of the block sub-matrix
+  // that is computed by the thread
+  float Csub = 0;
+
+  // Loop over all the sub-matrices of A and B
+  // required to compute the block sub-matrix
+  for (int a = aBegin, b = bBegin;
+       a < aEnd;
+       a += aStep, b += bStep) {
+    // Declaration of the shared memory array As used to
+    // store the sub-matrix of A
+    __shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
+
+    // Declaration of the shared memory array Bs used to
+    // store the sub-matrix of B
+    __shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
+
+    // Load the matrices from device memory
+    // to shared memory; each **thread** loads
+    // one element of each matrix
+    // --- TO DO :Load the elements of the sub-matrix of A into As ---
+    // ---        Load the elements of the sub-matrix of B into Bs ---
+    // NOTE: Ensure that the thread indices do not exceed the matrix dimensions to avoid out-of-bounds access.
+    //       Use boundary checks to load valid elements into shared memory, and set invalid elements to 0.0f
+    
+    int aRow = ty + a / wA;
+    int aCol = tx + a % wA;
+
+    int bRow = ty + b / wB;
+    int bCol = tx + b % wB;
+
+    if (aRow < wA && aCol < wA)
+      As[ty][tx] = A[aRow * wA + aCol];
+    else
+      As[ty][tx] = 0.0f;
+
+    if (bRow < wA && bCol < wB)
+      Bs[ty][tx] = B[bRow * wB + bCol];
+    else
+      Bs[ty][tx] = 0.0f;
+
+    // Synchronize to make sure the matrices are loaded
+    __syncthreads();
+
+    // Multiply the two matrices together;
+    // each thread computes one element
+    // of the block sub-matrix
+#pragma unroll
+    // --- TO DO :Implement the matrix multiplication using the sub-matrices As and Bs ---
+    for (int k = 0; k < BLOCK_SIZE; k++) {
+      Csub += As[ty][k] * Bs[k][tx];
+    }
+
+    // Synchronize to make sure that the preceding
+    // computation is done before loading two new
+    // sub-matrices of A and B in the next iteration
+    __syncthreads();
+  }
+
+  // Write the block sub-matrix to device memory;
+  // each thread writes one element
+  int c = wB * BLOCK_SIZE * by + BLOCK_SIZE * bx;
+  // --- TO DO :Store the computed Csub result into matrix C ---
+  // NOTE: Ensure that the thread indices "c" do not exceed the matrix dimensions to avoid out-of-bounds access.
+  //       Use boundary checks to write valid elements to the output matrix
+  int C_row = by * BLOCK_SIZE + ty;
+  int C_col = bx * BLOCK_SIZE + tx;
+  if (C_row < wA && C_col < wB)
+      C[c + ty * wB + tx] = Csub;
 
 }
 
@@ -32,10 +121,12 @@ __global__ void MatrixMulKernel(float* d_M, float* d_N, float* d_P, int width)
   // Calculate the row index of the P element and M
   // *** TO DO: Compute the row index for the current thread ***
   // int row = ...;
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
 
   // Calculate the column index of the P element and N
   // *** TO DO: Compute the column index for the current thread ***
   // int col = ...;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
 
   // Ensure the thread is within bounds
   if ( (row < width) && (col < width) ) {
@@ -43,13 +134,14 @@ __global__ void MatrixMulKernel(float* d_M, float* d_N, float* d_P, int width)
 
     // Each thread computes one element of the matrix
     // *** TO DO: Implement the matrix multiplication for a single element ***
-
+    for (int k = 0; k < width; ++k) {
+      pValue += d_M[row * width + k] * d_N[k * width + col];
+    }
 
     // Store the computed value into the output matrix
     // *** TO DO: Write the computed value to the correct position in d_P ***
-    // d_P[row * width + col] = ...;
+    d_P[row * width + col] = pValue;
     
-
 
   }
 }
@@ -205,9 +297,9 @@ int main(int argc, char* argv[])
   const float beta  = 0.0f;
   for (int j = 0; j < nIter; j++) {
     //matrixMulCPU(reference, h_M, h_N, m, k, n);
-    MatrixMulKernel<<<grid, block>>>(d_M, d_N, d_P, m);
-    //MatrixMulSharedMemKernel<<<grid, block>>>(d_M, d_N, d_P, m, n);
-    //cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, d_N, n, d_M, k, &beta, d_P, n);
+    // MatrixMulKernel<<<grid, block>>>(d_M, d_N, d_P, m);
+    // MatrixMulSharedMemKernel<<<grid, block>>>(d_M, d_N, d_P, m, n);
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, d_N, n, d_M, k, &beta, d_P, n);
   }
 
   cudaEventRecord(stop, 0);

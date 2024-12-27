@@ -1,1 +1,1 @@
-nvcc -arch=compute_35 -L/usr/local/cuda/lib64 -lcublas ./matrix_mul.cu
+nvcc -arch=compute_35 -L/usr/local/cuda/lib64 -lcublas -o cuda_mul ./matrix_mul.cu
